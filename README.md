@@ -69,6 +69,9 @@ python -m trainer generate       # ~400 TTS samples by default
 python -m trainer download       # one-time, several GB
 python -m trainer features
 python -m trainer train          # GPU: tens of minutes. CPU: hours.
+
+# 4. Try it out
+python -m trainer test --mic     # live detection from your microphone
 ```
 
 The result lands in `models/`. Verify GPU visibility with:
@@ -76,6 +79,31 @@ The result lands in `models/`. Verify GPU visibility with:
 ```bash
 python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
 ```
+
+## Testing the model before flashing
+
+Speak at your PC and watch detections live (uses the same moving-average +
+cutoff logic as ESPHome, read from the exported manifest):
+
+```bash
+python -m trainer test --mic
+```
+
+A probability meter is drawn continuously, so you can see near-misses and pick
+a better `probability_cutoff` — try `--cutoff 0.9` etc. to experiment without
+retraining. Mic capture needs PortAudio (`sudo apt install libportaudio2`).
+
+You can also score audio files — e.g. recordings the model has never seen
+(the ones you kept out of `samples/recorded/`), or negative clips that should
+NOT trigger:
+
+```bash
+python -m trainer test my_test_clips/ should_not_trigger.wav
+```
+
+The final verdict still comes from the real device: microphone quality,
+distance and room acoustics on the ESP32 differ from your PC, so flash the
+model and check the ESPHome logs before declaring victory.
 
 ## Using the model in ESPHome
 

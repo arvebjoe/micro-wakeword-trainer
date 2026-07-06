@@ -37,6 +37,10 @@ openai>=1.60
 soundfile>=0.12
 soxr>=0.3
 
+# Live-mic model testing (`python -m trainer test --mic`).
+# On Debian/Ubuntu the PortAudio system library is needed: apt install libportaudio2
+sounddevice>=0.4
+
 # Shared utilities
 numpy
 pyyaml
