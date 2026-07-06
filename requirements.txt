@@ -1,0 +1,44 @@
+# -----------------------------------------------------------------------------
+# micro-wakeword-trainer dependencies
+#
+# The version pins below are load-bearing — they were validated against
+# microWakeWord (OHF-Voice/micro-wake-word) and known-broken combinations:
+#
+#   * tensorflow 2.19+ ships a Keras whose `model.evaluate()` returns plain
+#     numpy values; microWakeWord calls `.numpy()` on them and crashes.
+#   * keras must stay < 3.11 for the same reason (3.8.0 is validated).
+#   * datasets 4.x dropped soundfile-based audio decoding in favour of
+#     torchcodec (pulls in all of PyTorch); 3.x decodes with soundfile/librosa.
+#   * microwakeword must be installed EDITABLE (-e). Its setup.py uses
+#     find_packages() but the `microwakeword/audio` and `microwakeword/layers`
+#     subpackages have no __init__.py, so a regular install silently drops
+#     them. An editable install maps the source tree and works.
+#   * audio-metadata is installed from a fork that unpins `attrs` (the PyPI
+#     release pins a version that conflicts with modern tooling). It must be
+#     listed before microwakeword so the resolver picks the fork.
+# -----------------------------------------------------------------------------
+
+# GPU training on Linux with an NVIDIA card. The [and-cuda] extra installs the
+# CUDA/cuDNN wheels alongside TensorFlow, no system CUDA install needed.
+# On a machine without an NVIDIA GPU, replace with: tensorflow==2.18.*
+tensorflow[and-cuda]==2.18.* ; sys_platform == "linux"
+tensorflow==2.18.* ; sys_platform != "linux"
+keras==3.8.0
+tensorboard
+
+datasets[audio]<4.0
+
+audio-metadata @ git+https://github.com/whatsnowplaying/audio-metadata@d4ebb238e6a401bb1a5aaaac60c9e2b3cb30929f
+# Pinned to a validated commit; the editable clone lands in .venv/src/.
+-e git+https://github.com/OHF-Voice/micro-wake-word.git@a70bd740d4e79ee8a8bb3db843fe862b88d5d6b0#egg=microwakeword
+
+# Stage 1: sample generation
+openai>=1.60
+soundfile>=0.12
+soxr>=0.3
+
+# Shared utilities
+numpy
+pyyaml
+tqdm
+huggingface_hub
