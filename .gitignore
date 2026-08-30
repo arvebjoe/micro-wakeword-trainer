@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+src/
+
+# Pipeline outputs (regenerable / large)
+samples/generated/
+data/
+training/
+models/
+
+# User recordings are personal audio — keep them out of git
+samples/recorded/*
+!samples/recorded/.gitkeep
+
+# Misc
+.DS_Store

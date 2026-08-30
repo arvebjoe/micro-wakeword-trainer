@@ -1,0 +1,123 @@
+# =============================================================================
+# micro-wakeword-trainer configuration
+#
+# Edit this file, then run the stages:
+#   python -m trainer generate    # stage 1: create TTS samples with OpenAI
+#   python -m trainer download    # fetch augmentation + negative datasets
+#   python -m trainer features    # build spectrogram features
+#   python -m trainer train       # stage 2: train and export .tflite + .json
+# =============================================================================
+
+# The wake word / phrase the model should detect.
+wake_word: "hey computer"
+
+# Optional phonetic respellings that TTS pronounces more like real speech.
+# Each entry is used for a share of the generated samples. Example for
+# "okay computer": ["okay khum_puter"]. Leave empty to use wake_word as-is.
+phonetic_spellings: []
+
+# Metadata written into the ESPHome model manifest.
+author: ""
+website: ""
+language: "en"
+
+paths:
+  generated_samples: "samples/generated"   # stage 1 output
+  recorded_samples: "samples/recorded"     # drop your own recordings here (wav/mp3/flac/ogg)
+  data: "data"                             # downloaded datasets (RIRs, noise, negatives)
+  training: "training"                     # features, checkpoints, logs
+  output: "models"                         # final .tflite + .json
+
+# -----------------------------------------------------------------------------
+# Stage 1: OpenAI TTS sample generation
+# Requires the OPENAI_API_KEY environment variable.
+# -----------------------------------------------------------------------------
+openai:
+  model: "gpt-4o-mini-tts"
+  # Total number of samples to generate, spread across voices/instructions.
+  num_samples: 400
+  voices: [alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse]
+  # Delivery styles, rotated across samples. gpt-4o-mini-tts follows these;
+  # they are ignored by tts-1 / tts-1-hd.
+  instructions:
+    - "Speak naturally at a normal conversational pace."
+    - "Speak quickly and casually, as if calling out to a device across the room."
+    - "Speak slowly and clearly, enunciating each word."
+    - "Speak softly, almost quietly, but clearly."
+    - "Speak loudly and energetically."
+    - "Speak in a flat, bored monotone."
+    - "Speak with a warm, friendly tone."
+  # After download, each clip is randomly speed-perturbed within this range
+  # (resampling trick: also shifts pitch slightly, adding voice diversity).
+  # Set to [1.0, 1.0] to disable.
+  speed_range: [0.85, 1.2]
+  # Parallel requests. Lower this if you hit rate limits.
+  concurrency: 4
+
+# -----------------------------------------------------------------------------
+# Stage 2: audio augmentation applied while building spectrogram features
+# (mirrors the defaults of the official microWakeWord training notebook)
+# -----------------------------------------------------------------------------
+augmentation:
+  duration_s: 3.2
+  probabilities:
+    SevenBandParametricEQ: 0.1
+    TanhDistortion: 0.1
+    PitchShift: 0.1
+    BandStopFilter: 0.1
+    AddColorNoise: 0.1
+    AddBackgroundNoise: 0.75
+    Gain: 1.0
+    RIR: 0.5
+  background_min_snr_db: -5
+  background_max_snr_db: 10
+  # Trim silence from clips with WebRTC VAD before augmenting. Useful when
+  # recorded clips have leading/trailing silence.
+  remove_silence: false
+  # How many augmented variants of each training clip to generate.
+  training_repetitions: 2
+
+# -----------------------------------------------------------------------------
+# Stage 2: training. Lists correspond to sequential training phases.
+# -----------------------------------------------------------------------------
+training:
+  steps: [20000]
+  learning_rates: [0.001]
+  batch_size: 128
+  positive_class_weight: [1]
+  negative_class_weight: [20]
+  time_mask_max_size: [0]
+  time_mask_count: [0]
+  freq_mask_max_size: [0]
+  freq_mask_count: [0]
+  eval_step_interval: 500
+  # Maximum wake word duration the streaming model accepts, in ms.
+  clip_duration_ms: 1500
+  # Metric used to pick the best checkpoint.
+  maximization_metric: "average_viable_recall"
+
+# MixedNet architecture (defaults from the official notebook).
+# Constraint: the resulting spectrogram length must be divisible by `stride`;
+# `python -m trainer train` validates this before starting.
+model:
+  pointwise_filters: "64,64,64,64"
+  repeat_in_block: "1,1,1,1"
+  mixconv_kernel_sizes: "[5],[7,11],[9,15],[23]"
+  residual_connection: "0,0,0,0"
+  first_conv_filters: 32
+  first_conv_kernel_size: 5
+  stride: 3
+
+# -----------------------------------------------------------------------------
+# ESPHome model manifest (v2) written next to the .tflite file.
+# -----------------------------------------------------------------------------
+manifest:
+  # Detection threshold. Raise towards 0.99 if you get false activations,
+  # lower towards 0.9 if the model is hard to trigger. The training report
+  # (printed at the end of `train`) shows false-reject/false-accept tradeoffs.
+  probability_cutoff: 0.97
+  sliding_window_size: 5
+  # Memory reserved on the ESP32 for the model. Increase if ESPHome logs
+  # "Failed to allocate tensor arena".
+  tensor_arena_size: 30000
+  minimum_esphome_version: "2024.7.0"
